@@ -44,8 +44,8 @@ make build-darwin
 Before running the CLI, you need to configure it:
 
 Create slack.config.json with your Slack credentials and channel information.
-The slack.emoji.json file will be downloaded from the specified GitHub URL on the first run.
-Example slack.config.json
+slack.emoji.json is used to display emoji in messages. 
+Both files must always be in the same folder as the binary file.
 ```json
 
 {
@@ -66,12 +66,12 @@ Example slack.config.json
 
 ./slack show
 ./slack show 100
-./slack show --date "2023-12-31"
-./slack show --date "2023-12-29:2023-12-31"
-./slack show --search "keyword"
-./slack show 500 --search "keyword"
-./slack show --filter "keyword"
-./slack show 500 --filter "keyword"
+./slack show --date 2023-12-31
+./slack show --date 2023-12-29:2023-12-31
+./slack show --search keyword
+./slack show 500 --search keyword
+./slack show --filter keyword
+./slack show 500 --filter keyword
 ./slack show --files
 ```
 ### Send Message
