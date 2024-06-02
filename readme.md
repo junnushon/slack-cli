@@ -9,6 +9,10 @@ Slack CLI is a command-line tool to interact with Slack, allowing users to send 
 - Upload and download files
 - Manage reactions (add/remove)
 - Update and delete messages
+- Choose channels
+
+## Run Binary
+For direct execution, please refer to the Releases
 
 ## Installation
 
@@ -40,7 +44,7 @@ make build-windows
 # or
 make build-darwin
 ```
-### Configuration
+## Configuration
 Before running the CLI, you need to configure it:
 
 Create slack.config.json with your Slack credentials and channel information.
@@ -52,7 +56,6 @@ Both files must always be in the same folder as the binary file.
     "slack_bot_token": "your_slack_bot_token",
     "slack_user_token": "your_slack_user_token",
     "channel_id": "your_channel_id",
-    "server_bot_user_id": "your_server_bot_user_id",
     "user_cache": {
         "U075JAXRYV7": "ServerBot"
     },
@@ -107,6 +110,13 @@ Both files must always be in the same folder as the binary file.
 ./slack emoji 1234567890.123456 white-check-mark
 ./slack emoji 1234567890.123456 --add thumbsup
 ./slack emoji 1234567890.123456 --del white-check-mark
+```
+### Choose Channels
+```sh
+
+./slack channels
+./slack channels --current
+./slack channels --current channel_name
 ```
 ### Show Examples
 ```sh

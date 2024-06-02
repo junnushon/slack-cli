@@ -22,6 +22,7 @@ const (
     emojiFileName          = "slack.emoji.json"
     slackUploadURL         = "https://slack.com/api/files.getUploadURLExternal"
     slackCompleteUploadURL = "https://slack.com/api/files.completeUploadExternal"
+    slackChannelsListURL = "https://slack.com/api/conversations.list"
 )
 
 var buildTime string
@@ -30,8 +31,8 @@ type Config struct {
     SlackBotToken    string            `json:"slack_bot_token"`
     SlackUserToken   string            `json:"slack_user_token"`
     ChannelID        string            `json:"channel_id"`
-    ServerBotUserID  string            `json:"server_bot_user_id"`
     UserCache        map[string]string `json:"user_cache"`
+    ChannelCache     map[string]string `json:"channel_cache"`
     DefaultShowLimit int               `json:"default_show_limit"`
     DefaultEmoji     string            `json:"default_emoji"`
 }
@@ -94,10 +95,10 @@ func createConfig() error {
         ChannelID:       "your_channel_id",
         SlackBotToken:   "your_slack_bot_token",
         SlackUserToken:  "your_slack_user_token",
-        ServerBotUserID: "your_server_bot_user_id",
         UserCache: map[string]string{
             "U075JAXRYV7": "Bot",
         },
+        ChannelCache:     make(map[string]string),
         DefaultShowLimit: 20,
         DefaultEmoji:     "white-check-mark",
     }
@@ -175,8 +176,9 @@ type SlackMessageItem struct {
 }
 
 type SlackMessagesResponse struct {
-    Messages []SlackMessageItem `json:"messages"`
-    HasMore  bool               `json:"has_more"`
+    OK       bool                `json:"ok"`
+    Messages []SlackMessageItem  `json:"messages"`
+    HasMore  bool                `json:"has_more"`
     ResponseMetadata struct {
         NextCursor string `json:"next_cursor"`
     } `json:"response_metadata"`
@@ -195,6 +197,60 @@ type UserProfile struct {
     } `json:"user"`
 }
 
+func getChannelList() (map[string]string, error) {
+    if len(config.ChannelCache) > 0 {
+        return config.ChannelCache, nil
+    }
+
+    apiURL := slackChannelsListURL + "?limit=1000"
+    req, _ := http.NewRequest("GET", apiURL, nil)
+    req.Header.Set("Authorization", "Bearer "+config.SlackBotToken)
+
+    fmt.Println("apiURL:", apiURL)
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    if err != nil {
+        return nil, fmt.Errorf("error fetching channel list: %v", err)
+    }
+    defer resp.Body.Close()
+
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return nil, fmt.Errorf("error reading channel list response: %v", err)
+    }
+
+    var response struct {
+        OK       bool `json:"ok"`
+        Channels []struct {
+            ID   string `json:"id"`
+            Name string `json:"name"`
+        } `json:"channels"`
+    }
+
+    err = json.Unmarshal(body, &response)
+    if err != nil {
+        return nil, fmt.Errorf("error decoding channel list JSON: %v", err)
+    }
+
+    if !response.OK {
+        return nil, fmt.Errorf("failed to fetch channel list")
+    }
+
+    channelCache := make(map[string]string)
+    for _, channel := range response.Channels {
+        channelCache[channel.ID] = channel.Name
+    }
+
+    config.ChannelCache = channelCache
+    err = saveConfig()
+    if err != nil {
+        return nil, fmt.Errorf("error saving config file: %v", err)
+    }
+
+    return channelCache, nil
+}
+
+
 func getUserName(userID string, userCache map[string]string) string {
     if userID == "" {
         return "Unknown"
@@ -204,7 +260,7 @@ func getUserName(userID string, userCache map[string]string) string {
         return name
     }
     if name, exists := config.UserCache[userID]; exists {
-        userCache[userID] = name 
+        userCache[userID] = name
         return name
     }
 
@@ -239,6 +295,9 @@ func getUserName(userID string, userCache map[string]string) string {
         config.UserCache[userID] = name
         saveConfig()
         return name
+    } else {
+        fmt.Println("Error in response. Response body:", string(body))
+        return "Unknown"
     }
 
     return "Unknown"
@@ -268,9 +327,32 @@ func sendMessage(message, threadTS string) error {
     }
     defer resp.Body.Close()
 
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        fmt.Println("Error reading response body:", err)
+        return err
+    }
+
+    var response struct {
+        OK    bool   `json:"ok"`
+        Error string `json:"error"`
+    }
+
+    err = json.Unmarshal(body, &response)
+    if err != nil {
+        fmt.Println("Error unmarshaling response:", err)
+        return err
+    }
+
+    if !response.OK {
+        fmt.Println("Error in response. Response body:", string(body))
+        return fmt.Errorf("failed to send message: %s", response.Error)
+    }
+
     fmt.Println("Message sent successfully")
     return nil
 }
+
 
 func fetchMessages(limit int, dateRange, search, filter string, showFilesOnly bool) {
     var cursor string
@@ -358,6 +440,11 @@ func fetchMessages(limit int, dateRange, search, filter string, showFilesOnly bo
         err = json.Unmarshal(body, &messagesResponse)
         if err != nil {
             fmt.Println("Error unmarshaling response:", err)
+            return
+        }
+
+        if !messagesResponse.OK {
+            fmt.Println("Error in response. Response body:", string(body))
             return
         }
 
@@ -455,6 +542,7 @@ func fetchMessages(limit int, dateRange, search, filter string, showFilesOnly bo
         fmt.Print(messages[i])
     }
 }
+
 func formatTimestamp(ts string) string {
     tsFloat, _ := strconv.ParseFloat(ts, 64)
     timeStamp := time.Unix(int64(tsFloat), 0)
@@ -473,10 +561,25 @@ func getThreadReplies(threadTs, filter, search string, userCache map[string]stri
     }
     defer resp.Body.Close()
 
-    var threadResponse struct {
-        Messages []SlackMessageItem `json:"messages"`
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return nil, fmt.Errorf("error reading response body: %v", err)
     }
-    json.NewDecoder(resp.Body).Decode(&threadResponse)
+
+    var threadResponse struct {
+        OK       bool                `json:"ok"`
+        Messages []SlackMessageItem  `json:"messages"`
+        Error    string              `json:"error"`
+    }
+    err = json.Unmarshal(body, &threadResponse)
+    if err != nil {
+        return nil, fmt.Errorf("error unmarshaling response: %v", err)
+    }
+
+    if !threadResponse.OK {
+        fmt.Println("Error in response. Response body:", string(body))
+        return nil, fmt.Errorf("failed to fetch thread replies: %s", threadResponse.Error)
+    }
 
     var replies []SlackMessageReply
     for _, msg := range threadResponse.Messages {
@@ -496,6 +599,7 @@ func getThreadReplies(threadTs, filter, search string, userCache map[string]stri
 
     return replies, nil
 }
+
 
 func getReactionsString(reactions []SlackReaction) string {
     var reactionsStr string
@@ -689,13 +793,30 @@ func addReaction(ts string, emoji string) error {
     }
     defer resp.Body.Close()
 
-    if err := handleError(resp.Body); err != nil {
-        return fmt.Errorf("Error response from API: %v", err)
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return fmt.Errorf("Error reading response body: %v", err)
+    }
+
+    var response struct {
+        OK    bool   `json:"ok"`
+        Error string `json:"error"`
+    }
+
+    err = json.Unmarshal(body, &response)
+    if err != nil {
+        return fmt.Errorf("Error unmarshaling response: %v", err)
+    }
+
+    if !response.OK {
+        fmt.Println("Error in response. Response body:", string(body))
+        return fmt.Errorf("Failed to add reaction: %s", response.Error)
     }
 
     fmt.Println("Reaction added successfully")
     return nil
 }
+
 
 func removeReaction(ts string, emoji string) error {
     if ts == "" {
@@ -725,13 +846,30 @@ func removeReaction(ts string, emoji string) error {
     }
     defer resp.Body.Close()
 
-    if err := handleError(resp.Body); err != nil {
-        return fmt.Errorf("Error response from API: %v", err)
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return fmt.Errorf("Error reading response body: %v", err)
+    }
+
+    var response struct {
+        OK    bool   `json:"ok"`
+        Error string `json:"error"`
+    }
+
+    err = json.Unmarshal(body, &response)
+    if err != nil {
+        return fmt.Errorf("Error unmarshaling response: %v", err)
+    }
+
+    if !response.OK {
+        fmt.Println("Error in response. Response body:", string(body))
+        return fmt.Errorf("Failed to remove reaction: %s", response.Error)
     }
 
     fmt.Println("Reaction removed successfully")
     return nil
 }
+
 
 func updateMessage(ts, message string) error {
     payload := map[string]string{
@@ -754,9 +892,32 @@ func updateMessage(ts, message string) error {
     }
     defer resp.Body.Close()
 
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        fmt.Println("Error reading response body:", err)
+        return err
+    }
+
+    var response struct {
+        OK    bool   `json:"ok"`
+        Error string `json:"error"`
+    }
+
+    err = json.Unmarshal(body, &response)
+    if err != nil {
+        fmt.Println("Error unmarshaling response:", err)
+        return err
+    }
+
+    if !response.OK {
+        fmt.Println("Error in response. Response body:", string(body))
+        return fmt.Errorf("Failed to update message: %s", response.Error)
+    }
+
     fmt.Println("Message updated successfully")
     return nil
 }
+
 
 func deleteMessage(ts string) error {
     payload := map[string]string{
@@ -778,9 +939,32 @@ func deleteMessage(ts string) error {
     }
     defer resp.Body.Close()
 
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        fmt.Println("Error reading response body:", err)
+        return err
+    }
+
+    var response struct {
+        OK    bool   `json:"ok"`
+        Error string `json:"error"`
+    }
+
+    err = json.Unmarshal(body, &response)
+    if err != nil {
+        fmt.Println("Error unmarshaling response:", err)
+        return err
+    }
+
+    if !response.OK {
+        fmt.Println("Error in response. Response body:", string(body))
+        return fmt.Errorf("Failed to delete message: %s", response.Error)
+    }
+
     fmt.Println("Message deleted successfully")
     return nil
 }
+
 
 func handleError(body io.Reader) error {
     var response struct {
@@ -848,7 +1032,7 @@ func unicodeToEmoji(unicodeStr string) (string, error) {
 func main() {
     checkAndLoadConfig()
 
-    fmt.Printf("Slack CLI (build time: %s)\n", buildTime) // 빌드 시간 출력
+    fmt.Printf("Slack CLI (build time: %s)\n", buildTime)
 
     var rootCmd = &cobra.Command{Use: "slack"}
 
@@ -964,6 +1148,53 @@ func main() {
         },
     }
 
+    var channelsCmd = &cobra.Command{
+        Use:   "channels",
+        Short: "List all Slack channels and cache them",
+        Run: func(cmd *cobra.Command, args []string) {
+            currentChannel, _ := cmd.Flags().GetString("current")
+            
+            if currentChannel == "" {
+                channelCache, err := getChannelList()
+                if err != nil {
+                    fmt.Println("Error fetching channel list:", err)
+                    return
+                }
+        
+                fmt.Println("Channels:")
+                for id, name := range channelCache {
+                    fmt.Printf("%s: %s\n", id, name)
+                }
+        
+                fmt.Printf("Current default channel: %s (%s)\n", config.ChannelCache[config.ChannelID], config.ChannelID)
+            } else {
+                var channelID string
+                for id, name := range config.ChannelCache {
+                    if name == currentChannel {
+                        channelID = id
+                        break
+                    }
+                }
+                if channelID == "" {
+                    fmt.Printf("Channel %s not found\n", currentChannel)
+                    return
+                }
+                config.ChannelID = channelID
+                err := saveConfig()
+                if err != nil {
+                    fmt.Println("Error saving config file:", err)
+                    return
+                }
+                fmt.Printf("Default channel set to %s (%s)\n", currentChannel, channelID)
+            }
+        },
+    }
+    
+    channelsCmd.Flags().String("current", "", "Get or set the default channel by name")
+    
+    
+    
+
     var examplesCmd = &cobra.Command{
         Use:   "examples",
         Short: "Show examples for all commands",
@@ -971,21 +1202,24 @@ func main() {
             fmt.Println(`Examples:
    ./slack show
    ./slack show 100
-   ./slack show --date 2023-12-31
-   ./slack show --date 2023-12-29:2023-12-31
-   ./slack show --search keyword
-   ./slack show 500 --search keyword
-   ./slack show --filter keyword
-   ./slack show 500 --filter keyword
+   ./slack show --date "2023-12-31"
+   ./slack show --date "2023-12-29:2023-12-31"
+   ./slack show --search "keyword"
+   ./slack show 500 --search "keyword"
+   ./slack show --filter "keyword"
+   ./slack show 500 --filter "keyword"
    ./slack show --files
+   ./slack channels
+   ./slack channels --current
+   ./slack channels --current channel_name
    ./slack send "Hello, Slack!"
    ./slack send "Hello, Slack!" --ts 1234567890.123456 (reply)
    ./slack edit --ts 1234567890.123456 --msg "Updated message"
    ./slack edit 1234567890.123456 "Updated message"
    ./slack delete --ts 1234567890.123456
    ./slack delete 1234567890.123456
-   ./slack upload path/to/your/file.txt
-   ./slack download https://file.url
+   ./slack upload "path/to/your/file.txt"
+   ./slack download "https://file.url"
    ./slack emoji
    ./slack emoji 1234567890.123456
    ./slack emoji 1234567890.123456 white-check-mark
@@ -994,6 +1228,7 @@ func main() {
         },
     }
     
+    // Add commands in the desired order
     rootCmd.AddCommand(sendCmd)
     rootCmd.AddCommand(showCmd)
     rootCmd.AddCommand(uploadCmd)
@@ -1002,7 +1237,9 @@ func main() {
     rootCmd.AddCommand(editCmd)
     rootCmd.AddCommand(deleteCmd)
     rootCmd.AddCommand(examplesCmd)
+    rootCmd.AddCommand(channelsCmd)
 
+    // Remove the 'help' command or add it at the end if needed
     rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
     
     if err := rootCmd.Execute(); err != nil {
