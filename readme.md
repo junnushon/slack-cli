@@ -19,7 +19,7 @@ Slack CLI is a command-line tool to interact with Slack, allowing users to send 
 ### Clone the Repository
 
 ```sh
-git clone https://github.com/your-repo/slack-cli.git
+git clone https://github.com/junnushon/slack-cli.git
 cd slack-cli
 ```
 
