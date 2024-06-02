@@ -1,0 +1,11 @@
+{
+    "slack_bot_token": "your_slack_bot_token",
+    "slack_user_token": "your_slack_user_token",
+    "channel_id": "your_channel_id",
+    "server_bot_user_id": "your_server_bot_user_id",
+    "user_cache": {
+        "U075JAXRYV7": "ServerBot"
+    },
+    "default_show_limit": 20,
+    "default_emoji": "white-check-mark"
+}
