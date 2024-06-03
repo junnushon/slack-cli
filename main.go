@@ -317,7 +317,7 @@ func sendMessage(message, threadTS string) error {
 
     req, _ := http.NewRequest("POST", "https://slack.com/api/chat.postMessage", bytes.NewBuffer(payload))
     req.Header.Set("Content-Type", "application/json; charset=utf-8")
-    req.Header.Set("Authorization", "Bearer "+config.SlackBotToken)
+    req.Header.Set("Authorization", "Bearer "+config.SlackUserToken)
 
     client := &http.Client{}
     resp, err := client.Do(req)
