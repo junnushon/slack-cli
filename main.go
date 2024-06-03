@@ -52,6 +52,10 @@ func loadConfig() error {
         return fmt.Errorf("could not decode config JSON: %v", err)
     }
 
+    if config.SlackBotToken == "" {
+        config.SlackBotToken = config.SlackUserToken
+    }
+
     return nil
 }
 

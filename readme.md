@@ -1,6 +1,7 @@
 # Slack CLI
 
 Slack CLI is a command-line tool to interact with Slack, allowing users to send messages, manage reactions, upload/download files, and more directly from the terminal.
+![image](./image.png)
 
 ## Features
 
@@ -48,8 +49,15 @@ make build-darwin
 Before running the CLI, you need to configure it:
 
 Create slack.config.json with your Slack credentials and channel information.
+
 slack.emoji.json is used to display emoji in messages. 
+
 Both files must always be in the same folder as the binary file.
+
+slack_user_token : Requied
+
+slack_bot_token : Optional
+
 ```json
 
 {
