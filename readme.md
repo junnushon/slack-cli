@@ -67,7 +67,7 @@ Both files must always be in the same folder as the binary file.
     "default_emoji": "white-check-mark"
 }
 ```
-slack_user_token : Requied  
+slack_user_token : Required  
 slack_bot_token : Optional
 
 ## Usage
