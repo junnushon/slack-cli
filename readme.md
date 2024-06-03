@@ -68,7 +68,7 @@ Both files must always be in the same folder as the binary file.
 }
 ```
 slack_user_token : Required  
-slack_bot_token : Optional
+slack_bot_token : Optional (If not provided, user_token will be used.)
 
 ## Usage
 ### Show Commands
