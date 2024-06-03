@@ -12,7 +12,7 @@ Slack CLI is a command-line tool to interact with Slack, allowing users to send 
 - Choose channels
 
 ## Run Binary
-For direct execution, please refer to the Releases
+For direct execution, please refer to the [Releases](https://github.com/junnushon/slack-cli/releases/tag/v0.1)
 
 ## Installation
 
