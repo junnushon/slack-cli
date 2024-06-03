@@ -71,18 +71,18 @@ slack_user_token : Required
 slack_bot_token : Optional (If not provided, user_token will be used.)
 
 Required Slack API OAuth Scope (User) :  
-channels:history  
-channels:read  
-chat:write  
-files:read  
-files:write  
-groups:history  
-groups:read  
-im:history  
-im:read  
-links:write  
-mpim:history  
-mpim:read  
+- channels:history  
+- channels:read  
+- chat:write  
+- files:read  
+- files:write  
+- groups:history  
+- groups:read  
+- im:history  
+- im:read  
+- links:write  
+- mpim:history  
+- mpim:read  
 
 
 ## Usage
