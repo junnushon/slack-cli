@@ -2,6 +2,7 @@
 
 Slack CLI is a command-line tool to interact with Slack, allowing users to send messages, manage reactions, upload/download files, and more directly from the terminal.
 
+![image](./image.png)
 
 ## Features
 
