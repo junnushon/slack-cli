@@ -128,6 +128,7 @@ mpim:read
 ### Manage Reactions
 ```sh
 
+./slack emoji
 ./slack emoji 1234567890.123456
 ./slack emoji 1234567890.123456 white-check-mark
 ./slack emoji 1234567890.123456 --add thumbsup
